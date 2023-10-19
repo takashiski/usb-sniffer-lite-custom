@@ -1,2 +1,3 @@
 .vs
 firmware/.vscode/c_cpp_properties.json
+*.uf2

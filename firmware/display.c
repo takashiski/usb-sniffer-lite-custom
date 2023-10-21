@@ -195,11 +195,11 @@ static void print_data(char *pid, uint8_t *data, int size)
 {
   size -= 4;
 
-  display_puts(pid);
+  //display_puts(pid);
 
   if (size == 0)
   {
-    display_puts(": ZLP\r\n");
+  //  display_puts(": ZLP\r\n");
   }
   else
   {
@@ -212,18 +212,19 @@ static void print_data(char *pid, uint8_t *data, int size)
     else if (g_display_data == DisplayData_Limit64)
       limited = LIMIT(size, 64);
 
-    display_puts(" (");
-    display_putdec(size, 0);
-    display_puts("): ");
+    //display_puts(" (");
+    //display_putdec(size, 0);
+    //display_puts("): ");
 
     for (int j = 0; j < limited; j++)
     {
+
       display_puthex(data[j+2], 2);
-      display_putc(' ');
+      //display_putc(' ');
     }
 
-    if (limited < size)
-      display_puts("...");
+    //if (limited < size)
+    //  display_puts("...");
 
     display_puts("\r\n");
   }
@@ -283,15 +284,18 @@ static bool print_packet(void)
     return false;
   }
 
-  g_display_ptr += (((size+3)/4) + 2);
-
   g_prev_time = time;
   g_check_delta = true;
 
-  if (flags & CAPTURE_LS_SOF)
-    pid = Pid_Sof;
+  g_display_ptr += (((size+3)/4) + 2);
 
-  if ((g_display_time == DisplayTime_SOF && pid == Pid_Sof) || (g_display_time == DisplayTime_Previous))
+  if (pid != Pid_Data0 && pid != Pid_Data1 && pid != Pid_Data2 && pid != Pid_MData)
+      return true;
+
+  //if (flags & CAPTURE_LS_SOF)
+  //  pid = Pid_Sof;
+
+  /*if ((g_display_time == DisplayTime_SOF && pid == Pid_Sof) || (g_display_time == DisplayTime_Previous))
     g_ref_time = time;
 
   if (g_folding)
@@ -314,11 +318,11 @@ static bool print_packet(void)
     g_folding = true;
     g_fold_count = 1;
     return true;
-  }
+  }*/
 
-  print_time(ftime);
+  //print_time(ftime);
 
-  if (flags & CAPTURE_RESET)
+  /*if (flags & CAPTURE_RESET)
   {
     print_reset();
 
@@ -335,13 +339,13 @@ static bool print_packet(void)
     print_ls_sof();
     return true;
   }
-
+*/
   if (flags & CAPTURE_ERROR_MASK)
   {
     print_errors(flags, payload, size);
     return true;
   }
-
+/*
   if (pid == Pid_Sof)
     print_sof(payload);
   else if (pid == Pid_In)
@@ -358,9 +362,8 @@ static bool print_packet(void)
   else if (pid == Pid_Stall)
     print_handshake("STALL");
   else if (pid == Pid_Nyet)
-    print_handshake("NYET");
-
-  else if (pid == Pid_Data0)
+    print_handshake("NYET");*/
+  if (pid == Pid_Data0)
     print_data("DATA0", payload, size);
   else if (pid == Pid_Data1)
     print_data("DATA1", payload, size);
@@ -368,15 +371,14 @@ static bool print_packet(void)
     print_data("DATA2", payload, size);
   else if (pid == Pid_MData)
     print_data("MDATA", payload, size);
-
-  else if (pid == Pid_Ping)
+  /*else if (pid == Pid_Ping)
     print_simple("PING");
   else if (pid == Pid_PreErr)
     print_simple("PRE/ERR");
   else if (pid == Pid_Split)
     print_split(payload);
   else if (pid == Pid_Reserved)
-    print_simple("RESERVED");
+    print_simple("RESERVED");*/
 
   return true;
 }
@@ -397,11 +399,11 @@ void display_buffer(void)
 {
   if (g_buffer_info.count == 0)
   {
-    display_puts("\r\nCapture buffer is empty\r\n");
+    //display_puts("\r\nCapture buffer is empty\r\n");
     return;
   }
 
-  display_puts("\r\nCapture buffer:\r\n");
+  //display_puts("\r\nCapture buffer:\r\n");
 
   g_ref_time    = g_buffer[1];
   g_prev_time   = g_buffer[1];
@@ -416,7 +418,7 @@ void display_buffer(void)
       break;
   }
 
-  if (g_folding && g_fold_count)
+  /*if (g_folding && g_fold_count)
     print_g_fold_count(g_fold_count);
 
   display_puts("\r\n");
@@ -430,5 +432,5 @@ void display_buffer(void)
   display_value(g_buffer_info.frames, "frame");
   display_puts(", ");
   display_value(g_buffer_info.folded, "empty frame");
-  display_puts("\r\n\r\n");
+  display_puts("\r\n\r\n");*/
 }

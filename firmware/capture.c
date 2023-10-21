@@ -426,6 +426,8 @@ static bool wait_for_trigger(void)
   }
 }
 
+static bool superBreak;
+
 //-----------------------------------------------------------------------------
 static void capture_buffer(void)
 {
@@ -569,11 +571,11 @@ static void capture_buffer(void)
 
   if (!wait_for_trigger())
   {
-    display_puts("Capture stopped\r\n");
+    //display_puts("Capture stopped\r\n");
     return;
   }
 
-  display_puts("Capture started\r\n");
+  //display_puts("Capture started\r\n");
 
   PIO1_SET->CTRL = (1 << (PIO0_CTRL_SM_ENABLE_Pos + 0));
   PIO0_SET->CTRL = (1 << (PIO0_CTRL_SM_ENABLE_Pos + 0));
@@ -593,22 +595,37 @@ static void capture_buffer(void)
         index += 2;
 
         if (g_buffer_info.count == g_buffer_info.limit)
+        { 
+          superBreak = true;
           break;
+        }
       }
       else
       {
         if (index < (BUFFER_SIZE-4)) // Reserve the space for a possible reset
+        {
           g_buffer[index++] = v;
+        }
         else
+        {
+          superBreak = true;
           break;
+        }
       }
+    } 
+
+    char command = poll_cmd();
+    if (command == 'p')
+      break;
+    else if (command == 'z')
+    {
+      superBreak = true;
+      break;
     }
 
-    if (poll_cmd() == 'p')
-      break;
   }
 
-  display_puts("Capture stopped\r\n");
+  //display_puts("Capture stopped\r\n");
 
   process_buffer();
   display_buffer();
@@ -661,7 +678,11 @@ static void core1_main(void)
     int cmd = poll_cmd();
 
     if (cmd == 's')
-      capture_buffer();
+    {
+      while(!superBreak)
+        capture_buffer();
+      superBreak = false;
+    }
     else if (cmd == 'p')
       {} // Do nothing here, stop only works if the capture is running
     else if (cmd == 'b')
@@ -680,6 +701,12 @@ static void core1_main(void)
       change_setting("Data display format", &g_display_data, DisplayDataCount, display_data_str);
     else if (cmd == 'f')
       change_setting("Fold empty frames", &g_display_fold, DisplayFoldCount, display_fold_str);
+    else if (cmd == 'x')
+      g_capture_speed = CaptureSpeed_Full;
+    else if (cmd == 'y')
+      g_capture_speed = CaptureSpeed_Low;
+    else if (cmd == 'z')
+      {} // Do nothing here, stop only works if the capture is running
   }
 }
 

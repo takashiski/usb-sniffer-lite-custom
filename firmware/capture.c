@@ -339,7 +339,7 @@ static void process_buffer(void)
 
     if (size > 0xffff)
     {
-      display_puts("Synchronization error. Check your speed setting.\r\n");
+      //display_puts("Synchronization error. Check your speed setting.\r\n");
       out_count = 0;
       break;
     }

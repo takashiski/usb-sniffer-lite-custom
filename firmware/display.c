@@ -280,7 +280,7 @@ static bool print_packet(void)
 
   if (g_check_delta && delta > MAX_PACKET_DELTA)
   {
-    display_puts("Time delta between packets is too large, possible buffer corruption.\r\n");
+  //  display_puts("Time delta between packets is too large, possible buffer corruption.\r\n");
     return false;
   }
 
@@ -291,6 +291,7 @@ static bool print_packet(void)
 
   if (pid != Pid_Data0 && pid != Pid_Data1 && pid != Pid_Data2 && pid != Pid_MData)
       return true;
+
 
   //if (flags & CAPTURE_LS_SOF)
   //  pid = Pid_Sof;
@@ -342,8 +343,8 @@ static bool print_packet(void)
 */
   if (flags & CAPTURE_ERROR_MASK)
   {
-    print_errors(flags, payload, size);
-    return true;
+      //print_errors(flags, payload, size);
+      return true;
   }
 /*
   if (pid == Pid_Sof)

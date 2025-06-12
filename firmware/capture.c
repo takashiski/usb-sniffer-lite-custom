@@ -471,11 +471,13 @@ static void display_packet_direct(int wr_ptr, int time_offset) {
 }
 
 //-----------------------------------------------------------------------------
-static void capture_buffer(void)
+static void capture_buffer()
 {
   volatile uint32_t *PIO0_INSTR_MEM = (volatile uint32_t *)&PIO0->INSTR_MEM0;
   volatile uint32_t *PIO1_INSTR_MEM = (volatile uint32_t *)&PIO1->INSTR_MEM0;
   int index, packet;
+  bool first_packet = true;
+  uint32_t time_offset = 0;
 
   HAL_GPIO_DP_init();
   HAL_GPIO_DM_init();

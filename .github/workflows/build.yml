@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install dependencies
         run: |
@@ -35,7 +35,7 @@ jobs:
           PICO_SDK_PATH: ${{ env.PICO_SDK_PATH }}
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: UsbSnifferLite.uf2
           path: firmware/bin/UsbSnifferLite.uf2

@@ -16,6 +16,6 @@ void display_putdec(uint32_t v, int size);
 void display_buffer(void);
 void print_in_out_setup(const char *type, uint8_t *payload);
 void print_handshake(const char *type);
-void print_data(const char *type, uint8_t *payload, int size);
+void print_data(const char *type, const uint8_t *payload, int size);
 
 #endif // _DISPLAY_H_

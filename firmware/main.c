@@ -247,7 +247,20 @@ void usb_cdc_recv_callback(int size)
     return;
 
   for (int i = 0; i < size; i++)
-    capture_command(lower(app_recv_buffer[i]));
+  {
+    char c = lower(app_recv_buffer[i]);
+    if (c == 'm') {
+        // mコマンドで逐次送信モード切替
+        g_capture_stream_mode = !g_capture_stream_mode;
+        capture_set_stream_mode(g_capture_stream_mode);
+        if (g_capture_stream_mode)
+            usb_cdc_send((uint8_t*)"Stream mode: ON\r\n", 17);
+        else
+            usb_cdc_send((uint8_t*)"Stream mode: OFF\r\n", 18);
+    } else {
+        capture_command(c);
+    }
+  }
 
   app_recv_pending = true;
   usb_cdc_recv(app_recv_buffer, sizeof(app_recv_buffer));

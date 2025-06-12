@@ -40,5 +40,7 @@ typedef struct
 /*- Prototypes --------------------------------------------------------------*/
 void capture_init(void);
 void capture_command(int cmd);
+extern int g_capture_stream_mode; // 0:バッファ一括, 1:逐次送信
+void capture_set_stream_mode(int mode);
 
 #endif // _CAPTURE_H_

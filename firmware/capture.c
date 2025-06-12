@@ -144,6 +144,9 @@ static int g_rd_ptr    = 0;
 static int g_wr_ptr    = 0;
 static int g_sof_index = 0;
 static bool g_may_fold = false;
+int g_capture_stream_mode = 0; // 0:バッファ一括, 1:逐次送信
+
+void capture_set_stream_mode(int mode) { g_capture_stream_mode = mode; }
 
 /*- Implementations ---------------------------------------------------------*/
 
@@ -429,6 +432,45 @@ static bool wait_for_trigger(void)
 static bool superBreak;
 
 //-----------------------------------------------------------------------------
+static void display_packet_direct(int wr_ptr, int time_offset) {
+    int flags = g_buffer[wr_ptr];
+    int time  = g_buffer[wr_ptr+1];
+    int ftime = time - time_offset;
+    int size  = flags & CAPTURE_SIZE_MASK;
+    uint8_t *payload = (uint8_t *)&g_buffer[wr_ptr+2];
+    int pid = payload[1] & 0x0f;
+    // 必要に応じてprint_packetのロジックを移植
+    // ここでは簡易的にDATA/SETUP/IN/OUT/ACK/NAK/STALLのみ出力
+    if (flags & CAPTURE_ERROR_MASK) return;
+    if (pid == Pid_Sof) {
+        int frame = ((payload[3] << 8) | payload[2]) & 0x7ff;
+        display_puts("SOF #");
+        display_putdec(frame, 0);
+        display_puts("\r\n");
+    } else if (pid == Pid_In) {
+        print_in_out_setup("IN", payload);
+    } else if (pid == Pid_Out) {
+        print_in_out_setup("OUT", payload);
+    } else if (pid == Pid_Setup) {
+        print_in_out_setup("SETUP", payload);
+    } else if (pid == Pid_Ack) {
+        print_handshake("ACK");
+    } else if (pid == Pid_Nak) {
+        print_handshake("NAK");
+    } else if (pid == Pid_Stall) {
+        print_handshake("STALL");
+    } else if (pid == Pid_Data0) {
+        print_data("DATA0", payload, size);
+    } else if (pid == Pid_Data1) {
+        print_data("DATA1", payload, size);
+    } else if (pid == Pid_Data2) {
+        print_data("DATA2", payload, size);
+    } else if (pid == Pid_MData) {
+        print_data("MDATA", payload, size);
+    }
+}
+
+//-----------------------------------------------------------------------------
 static void capture_buffer(void)
 {
   volatile uint32_t *PIO0_INSTR_MEM = (volatile uint32_t *)&PIO0->INSTR_MEM0;
@@ -591,6 +633,11 @@ static void capture_buffer(void)
         g_buffer[packet+0] = 0xffffffff - v;
         g_buffer[packet+1] = TIMER->TIMELR;
         g_buffer_info.count++;
+        if (first_packet) { time_offset = g_buffer[packet+1]; first_packet = false; }
+        if (g_capture_stream_mode) {
+            // 逐次送信モード: 1パケット分を即時出力
+            display_packet_direct(packet, time_offset);
+        }
         packet = index;
         index += 2;
 
@@ -625,10 +672,10 @@ static void capture_buffer(void)
 
   }
 
-  //display_puts("Capture stopped\r\n");
-
-  process_buffer();
-  display_buffer();
+  if (!g_capture_stream_mode) {
+      process_buffer();
+      display_buffer();
+  }
 }
 
 //-----------------------------------------------------------------------------
@@ -650,6 +697,7 @@ static void print_help(void)
   display_puts("  b - Display buffer\r\n");
   display_puts("  s - Start capture\r\n");
   display_puts("  p - Stop capture\r\n");
+  display_puts("  m - Toggle stream mode (逐次送信モード切替)\r\n");
   display_puts("\r\n");
 }
 

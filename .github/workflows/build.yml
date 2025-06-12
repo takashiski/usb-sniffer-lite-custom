@@ -1,0 +1,41 @@
+name: Build Firmware
+
+on:
+  push:
+    paths:
+      - 'firmware/**'
+      - '.github/workflows/**'
+  pull_request:
+    paths:
+      - 'firmware/**'
+      - '.github/workflows/**'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-none-eabi make cmake
+
+      - name: Set up Pico SDK
+        run: |
+          git clone --depth=1 https://github.com/raspberrypi/pico-sdk.git $HOME/pico-sdk
+          echo "PICO_SDK_PATH=$HOME/pico-sdk" >> $GITHUB_ENV
+
+      - name: Build firmware
+        run: |
+          cd firmware/make
+          make
+        env:
+          PICO_SDK_PATH: ${{ env.PICO_SDK_PATH }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: UsbSnifferLite.uf2
+          path: firmware/bin/UsbSnifferLite.uf2

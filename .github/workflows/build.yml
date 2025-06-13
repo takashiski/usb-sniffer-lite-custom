@@ -22,6 +22,13 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y gcc-arm-none-eabi make cmake
 
+      - name: Install bin2uf2
+        run: |
+          git clone --depth=1 https://github.com/ataradov/tools.git $HOME/tools
+          cd $HOME/tools/bin2uf2
+          make
+          sudo cp bin2uf2 /usr/local/bin/
+
       - name: Set up Pico SDK
         run: |
           git clone --depth=1 https://github.com/raspberrypi/pico-sdk.git $HOME/pico-sdk

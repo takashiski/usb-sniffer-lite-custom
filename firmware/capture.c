@@ -144,7 +144,7 @@ static int g_rd_ptr    = 0;
 static int g_wr_ptr    = 0;
 static int g_sof_index = 0;
 static bool g_may_fold = false;
-int g_capture_stream_mode = 0; // 0:バッファ一括, 1:逐次送信
+int g_capture_stream_mode = 1; // 0:バッファ一括, 1:逐次送信（デフォルトを逐次送信モードに変更）
 
 void capture_set_stream_mode(int mode) { g_capture_stream_mode = mode; }
 

@@ -137,14 +137,14 @@ static void print_sof(uint8_t *data)
 }
 
 //-----------------------------------------------------------------------------
-static void print_handshake(const char *pid)
+void print_handshake(const char *pid)
 {
   display_puts(pid);
   display_puts("\r\n");
 }
 
 //-----------------------------------------------------------------------------
-static void print_in_out_setup(const char *pid, const uint8_t *data)
+void print_in_out_setup(const char *pid, uint8_t *data)
 {
   int v = (data[3] << 8) | data[2];
   int addr = v & 0x7f;
@@ -191,7 +191,7 @@ static void print_simple(char *text)
 }
 
 //-----------------------------------------------------------------------------
-static void print_data(const char *pid, const uint8_t *data, int size)
+void print_data(const char *pid, uint8_t *data, int size)
 {
   size -= 4;
 

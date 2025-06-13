@@ -144,7 +144,7 @@ static int g_rd_ptr    = 0;
 static int g_wr_ptr    = 0;
 static int g_sof_index = 0;
 static bool g_may_fold = false;
-int g_capture_stream_mode = 1; // 0:バッファ一括, 1:逐次送信（デフォルトを逐次送信モードに変更）
+int g_capture_stream_mode = 0; // 0:バッファ一括, 1:逐次送信
 
 void capture_set_stream_mode(int mode) { g_capture_stream_mode = mode; }
 
@@ -632,18 +632,18 @@ static void capture_buffer()
 
       if (v & 0x80000000)
       {
-        if (g_capture_stream_mode) {
+if (g_capture_stream_mode) {
             // 逐次送信モード: バッファに保存せず即時出力のみ
             static uint32_t temp_packet[2];
             temp_packet[0] = 0xffffffff - v;
             temp_packet[1] = TIMER->TIMELR;
             display_packet_direct(0, temp_packet[1]);
         } else {
-            g_buffer[packet+0] = 0xffffffff - v;
-            g_buffer[packet+1] = TIMER->TIMELR;
-            g_buffer_info.count++;
-            if (first_packet) { time_offset = g_buffer[packet+1]; first_packet = false; }
-        }
+        g_buffer[packet+0] = 0xffffffff - v;
+        g_buffer[packet+1] = TIMER->TIMELR;
+        g_buffer_info.count++;
+        if (first_packet) { time_offset = g_buffer[packet+1]; first_packet = false; }
+                }
         packet = index;
         index += 2;
 

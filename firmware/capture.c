@@ -632,18 +632,22 @@ static void capture_buffer()
 
       if (v & 0x80000000)
       {
-        g_buffer[packet+0] = 0xffffffff - v;
-        g_buffer[packet+1] = TIMER->TIMELR;
-        g_buffer_info.count++;
-        if (first_packet) { time_offset = g_buffer[packet+1]; first_packet = false; }
         if (g_capture_stream_mode) {
-            // 逐次送信モード: 1パケット分を即時出力
-            display_packet_direct(packet, time_offset);
+            // 逐次送信モード: バッファに保存せず即時出力のみ
+            static uint32_t temp_packet[2];
+            temp_packet[0] = 0xffffffff - v;
+            temp_packet[1] = TIMER->TIMELR;
+            display_packet_direct(0, temp_packet[1]);
+        } else {
+            g_buffer[packet+0] = 0xffffffff - v;
+            g_buffer[packet+1] = TIMER->TIMELR;
+            g_buffer_info.count++;
+            if (first_packet) { time_offset = g_buffer[packet+1]; first_packet = false; }
         }
         packet = index;
         index += 2;
 
-        if (g_buffer_info.count == g_buffer_info.limit)
+        if (!g_capture_stream_mode && g_buffer_info.count == g_buffer_info.limit)
         { 
           superBreak = true;
           break;
@@ -651,11 +655,11 @@ static void capture_buffer()
       }
       else
       {
-        if (index < (BUFFER_SIZE-4)) // Reserve the space for a possible reset
+        if (!g_capture_stream_mode && index < (BUFFER_SIZE-4)) // Reserve the space for a possible reset
         {
           g_buffer[index++] = v;
         }
-        else
+        else if (!g_capture_stream_mode)
         {
           superBreak = true;
           break;

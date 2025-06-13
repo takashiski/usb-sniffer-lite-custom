@@ -24,7 +24,7 @@
 #define VCP_TIMEOUT        10000 // us
 #define STATUS_TIMEOUT     500000 // us
 
-HAL_GPIO_PIN(LED_O, 0, 22, sio_22)
+HAL_GPIO_PIN(LED_O, 0, 25, sio_25)
 HAL_GPIO_PIN(LED_R, 0, 26, sio_26)
 
 /*- Variables ---------------------------------------------------------------*/

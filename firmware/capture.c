@@ -12,8 +12,7 @@
 #include "capture.h"
 #include "display.h"
 #include "globals.h"
-#include "pio_usb.h"
-#include "pio_usb.h"
+#include "../pico-pio-usb/src/pio_usb.h"
 
 /*- Definitions -------------------------------------------------------------*/
 #define CORE1_STACK_SIZE       512 // words

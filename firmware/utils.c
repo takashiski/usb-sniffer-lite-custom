@@ -69,7 +69,7 @@ void format_hex(char *buf, uint32_t v, int size)
 //-----------------------------------------------------------------------------
 void format_dec(char *buf, uint32_t v, int size)
 {
-  uint32_t remainder;
+  uint32_t remainder = 0;
   int len = 0;
 
   do

@@ -77,6 +77,77 @@ void print_in_out_setup(const char *pid, uint8_t *data)
   display_puthex(ep, 1);
   display_puts("\r\n");
 }
+//-----------------------------------------------------------------------------
+
+static void print_errors(uint32_t flags, uint8_t *data, int size)
+{
+  flags &= CAPTURE_ERROR_MASK;
+
+  display_puts("ERROR [");
+
+  while (flags)
+  {
+    int bit = (flags & ~(flags-1));
+
+    if (bit == CAPTURE_ERROR_STUFF)
+      display_puts("STUFF");
+    else if (bit == CAPTURE_ERROR_CRC)
+      display_puts("CRC");
+    else if (bit == CAPTURE_ERROR_PID)
+      display_puts("PID");
+    else if (bit == CAPTURE_ERROR_SYNC)
+      display_puts("SYNC");
+    else if (bit == CAPTURE_ERROR_NBIT)
+      display_puts("NBIT");
+    else if (bit == CAPTURE_ERROR_SIZE)
+      display_puts("SIZE");
+
+    flags &= ~bit;
+
+    if (flags)
+      display_puts(", ");
+  }
+
+  display_puts("]: ");
+
+  if (size > 0)
+  {
+    display_puts("SYNC = 0x");
+    display_puthex(data[0], 2);
+    display_puts(", ");
+  }
+
+  if (size > 1)
+  {
+    display_puts("PID = 0x");
+    display_puthex(data[1], 2);
+    display_puts(", ");
+  }
+
+  if (size > 2)
+  {
+    bool limited = false;
+
+    display_puts("DATA: ");
+
+    if (size > ERROR_DATA_SIZE_LIMIT)
+    {
+      size = ERROR_DATA_SIZE_LIMIT;
+      limited = true;
+    }
+
+    for (int i = 2; i < size; i++)
+    {
+      display_puthex(data[i], 2);
+      display_putc(' ');
+    }
+
+    if (limited)
+      display_puts("...");
+  }
+
+  display_puts("\r\n");
+}
 
 //-----------------------------------------------------------------------------
 static bool print_packet(void)
@@ -90,7 +161,7 @@ static bool print_packet(void)
 
   if (g_check_delta && delta > MAX_PACKET_DELTA)
   {
-  //  display_puts("Time delta between packets is too large, possible buffer corruption.\r\n");
+   display_puts("Time delta between packets is too large, possible buffer corruption.\r\n");
     return false;
   }
 
@@ -131,7 +202,7 @@ static bool print_packet(void)
     return true;
   }*/
 
-  //print_time(ftime);
+  // print_time(ftime);
 
   /*if (flags & CAPTURE_RESET)
   {
@@ -153,7 +224,7 @@ static bool print_packet(void)
 */
   if (flags & CAPTURE_ERROR_MASK)
   {
-      //print_errors(flags, payload, size);
+      print_errors(flags, payload, size);
       return true;
   }
 /*
@@ -210,11 +281,11 @@ void display_buffer(void)
 {
   if (g_buffer_info.count == 0)
   {
-    //display_puts("\r\nCapture buffer is empty\r\n");
+    display_puts("\r\nCapture buffer is empty\r\n");
     return;
   }
 
-  //display_puts("\r\nCapture buffer:\r\n");
+  display_puts("\r\nCapture buffer:\r\n");
 
   g_ref_time    = g_buffer[1];
   g_prev_time   = g_buffer[1];
@@ -229,8 +300,8 @@ void display_buffer(void)
       break;
   }
 
-  /*if (g_folding && g_fold_count)
-    print_g_fold_count(g_fold_count);
+  // if (g_folding && g_fold_count)
+  //   print_g_fold_count(g_fold_count);
 
   display_puts("\r\n");
   display_puts("Total: ");
@@ -243,5 +314,5 @@ void display_buffer(void)
   display_value(g_buffer_info.frames, "frame");
   display_puts(", ");
   display_value(g_buffer_info.folded, "empty frame");
-  display_puts("\r\n\r\n");*/
+  display_puts("\r\n\r\n");
 }

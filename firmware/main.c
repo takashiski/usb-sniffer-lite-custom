@@ -12,6 +12,8 @@
 #include "hardware/irq.h"
 #include "usb_sniffer.pio.h"
 #include "tusb.h"
+#include "pico/binary_info.h"
+#include "usb_descriptors.h"
 
 /*- Definitions -------------------------------------------------------------*/
 #define USB_DMINUS_PIN 10
@@ -59,25 +61,54 @@ static void process_usb_samples(uint8_t *samples, int sample_len) {
     }
 }
 
-//-----------------------------------------------------------------------------
-void on_cdc_rx(void) {
+// TinyUSB CDC受信コールバック
+void tud_cdc_rx_cb(uint8_t itf) {
     uint8_t buf[64];
-    uint32_t count = tud_cdc_n_read(0, buf, sizeof(buf));
+    uint32_t count = tud_cdc_n_read(itf, buf, sizeof(buf));
     if (count > 0) {
         if (count >= 5 && !memcmp(buf, "START", 5)) sniffing = true;
         if (count >= 4 && !memcmp(buf, "STOP", 4)) sniffing = false;
     }
 }
 
-//-----------------------------------------------------------------------------
+// TinyUSB用デバイス記述子コールバック
+uint8_t const *tud_descriptor_device_cb(void) {
+    return (uint8_t const *)&usb_device_descriptor;
+}
+
+uint8_t const *tud_descriptor_configuration_cb(uint8_t index) {
+    (void)index;
+    return (uint8_t const *)&usb_configuration_hierarchy;
+}
+
+uint16_t const *tud_descriptor_string_cb(uint8_t index, uint16_t langid) {
+    static uint16_t desc_str[32];
+    (void)langid;
+    if (index == 0) {
+        desc_str[0] = (USB_STRING_DESCRIPTOR << 8) | 0x02;
+        desc_str[1] = 0x0409;
+        return desc_str;
+    }
+    const char *str = (index < USB_STR_COUNT) ? usb_strings[index] : NULL;
+    if (!str) return NULL;
+    size_t len = strlen(str);
+    if (len > 31) len = 31;
+    desc_str[0] = (USB_STRING_DESCRIPTOR << 8) | ((len + 1) * 2);
+    for (size_t i = 0; i < len; i++) desc_str[i + 1] = str[i];
+    return desc_str;
+}
+
 int main() {
     stdio_init_all();
     tusb_init();
     PIO pio = pio0;
     uint sm = 0;
     uint offset = pio_add_program(pio, &usb_sniffer_program);
-    usb_sniffer_program_init(pio, sm, offset, USB_DMINUS_PIN, USB_DPLUS_PIN);
-    tud_cdc_set_rx_cb(on_cdc_rx);
+    pio_sm_config c = usb_sniffer_program_get_default_config(offset);
+    pio_sm_set_consecutive_pindirs(pio, sm, USB_DMINUS_PIN, 2, false);
+    pio_sm_set_in_pins(pio, sm, USB_DMINUS_PIN);
+    pio_sm_init(pio, sm, offset, &c);
+    pio_sm_set_enabled(pio, sm, true);
 
     uint8_t sample_buf[USB_SAMPLE_BUF_SIZE];
     int sample_ptr = 0;

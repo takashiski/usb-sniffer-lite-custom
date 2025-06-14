@@ -17,10 +17,16 @@ pico_sdk_init()
 set(SRC_FILES
     main.c
     usb_sniffer.pio
+    usb_descriptors.c
 )
 
 # 実行ファイル生成
 add_executable(usb_sniffer_pico ${SRC_FILES})
 pico_generate_pio_header(usb_sniffer_pico ${CMAKE_CURRENT_LIST_DIR}/usb_sniffer.pio)
+include_directories(${CMAKE_CURRENT_LIST_DIR})
 target_link_libraries(usb_sniffer_pico pico_stdlib hardware_pio hardware_irq tinyusb_device)
+
+# 拡張子付き出力ファイルを明示的に生成
+set_target_properties(usb_sniffer_pico PROPERTIES OUTPUT_NAME "usb_sniffer_pico.elf")
+
 pico_add_extra_outputs(usb_sniffer_pico)

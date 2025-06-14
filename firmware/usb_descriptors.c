@@ -5,6 +5,7 @@
 #include <stdalign.h>
 #include "usb.h"
 #include "usb_descriptors.h"
+#include "tusb.h"
 
 /*- Variables ---------------------------------------------------------------*/
 const alignas(4) usb_device_descriptor_t usb_device_descriptor =
@@ -157,3 +158,5 @@ const char *usb_strings[] =
   [USB_STR_PRODUCT]       = "USB Sniffer Lite (RP2040)",
   [USB_STR_SERIAL_NUMBER] = usb_serial_number,
 };
+
+// TinyUSBコールバック関数はmain.cで定義するため、ここからは削除

@@ -30,6 +30,7 @@ LDFLAGS += -Wl,--script=../linker/rp2040.ld
 
 SRCS = \
   ../main.c \
+  ../usb_descriptors.c \
   ../startup_rp2040.c
 
 INCLUDES = \

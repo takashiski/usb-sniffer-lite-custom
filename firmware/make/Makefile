@@ -30,7 +30,8 @@ LDFLAGS += -Wl,--script=../linker/rp2040.ld
 
 INCLUDES += \
   -I../include \
-  -I..
+  -I.. \
+  -I../pico-pio-usb/src
 
 SRCS += \
   ../main.c \

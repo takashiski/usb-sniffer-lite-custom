@@ -8,7 +8,7 @@
 #include <stdint.h>
 
 /*- Definitions -------------------------------------------------------------*/
-#define BUFFER_SIZE            ((232*1024) / (int)sizeof(uint32_t))
+#define BUFFER_SIZE            0x2000
 
 enum
 {

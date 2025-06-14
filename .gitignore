@@ -1,3 +1,19 @@
 .vs
 firmware/.vscode/c_cpp_properties.json
 *.uf2
+# ビルド生成物・中間ファイルを無視
+firmware/build/
+firmware/make/build/
+firmware/pico-pio-usb/build/
+*.o
+*.d
+*.elf
+*.bin
+*.map
+*.hex
+*.a
+*.log
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile

@@ -31,7 +31,17 @@ LDFLAGS += -Wl,--script=../linker/rp2040.ld
 INCLUDES += \
   -I../include \
   -I.. \
-  -I../pico-pio-usb/src
+  -I../pico-pio-usb/src \
+  -I$(PICO_SDK_PATH)/src/common/include \
+  -I$(PICO_SDK_PATH)/src/rp2_common/hardware_sync/include \
+  -I$(PICO_SDK_PATH)/src/rp2_common/hardware_base/include \
+  -I$(PICO_SDK_PATH)/src/boards/include \
+  -I$(PICO_SDK_PATH)/src/rp2040/hardware_regs/include \
+  -I$(PICO_SDK_PATH)/src/rp2_common/pico_platform/include \
+  -I$(PICO_SDK_PATH)/src/host/pico_include \
+  -I$(PICO_SDK_PATH)/src/rp2_common/pico_stdlib/include \
+  -I$(PICO_SDK_PATH)/src/common/pico_base_headers/include \
+  -I$(PICO_SDK_PATH)/src/boards/include/boards \
 
 SRCS += \
   ../main.c \

@@ -95,3 +95,42 @@ number of packets. After the capture is done, the buffer is displayed using curr
 
 The display settings may be adjusted without a new capture. Once the buffer is captured,
 it is stored in the memory and can be displayed again using a `b` command.
+
+## ファームウェアのビルド方法（WSL2 Ubuntu 24.04/CMake方式）
+
+1. 必要なパッケージをインストールしてください。
+
+```bash
+sudo apt update
+sudo apt install -y gcc-arm-none-eabi cmake make git
+```
+
+2. Pico SDKをクローンし、環境変数を設定します。
+
+```bash
+git clone --depth=1 https://github.com/raspberrypi/pico-sdk.git ~/pico-sdk
+echo 'export PICO_SDK_PATH=~/pico-sdk' >> ~/.bashrc
+export PICO_SDK_PATH=~/pico-sdk
+```
+
+3. サブモジュールを初期化します。
+
+```bash
+git submodule update --init --recursive
+```
+
+4. ビルドディレクトリを作成し、CMakeでビルドします。
+
+```bash
+cd firmware
+mkdir -p build
+cd build
+cmake ..
+make -j$(nproc)
+```
+
+5. ビルドが成功すると `UsbSnifferLite.uf2` などのファイルが `firmware/build` ディレクトリに生成されます。
+
+---
+
+従来のMakefile方式ではなく、CMake方式でのビルドに切り替わっています。詳細な手順やトラブルシュートは `EnvironmentSetup.md` も参照してください。

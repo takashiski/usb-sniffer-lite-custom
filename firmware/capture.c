@@ -13,7 +13,7 @@
 #include "display.h"
 #include "globals.h"
 #include "pio_usb.h"
-#include "pio_usb_host.h"
+#include "pio_usb.h"
 
 /*- Definitions -------------------------------------------------------------*/
 #define CORE1_STACK_SIZE       512 // words
@@ -476,13 +476,12 @@ static void display_packet_direct(int wr_ptr, int time_offset) {
 void capture_buffer()
 {
   // pico-pio-usbの初期化
-  pio_usb_configuration_t config = {
-      .sm = 0,
-      .pin_dp = DP_INDEX,
-      .pin_dm = DM_INDEX,
-      .pio = pio0,
-      .host_callback = usb_packet_callback,
-  };
+  pio_usb_configuration_t config = PIO_USB_DEFAULT_CONFIG;
+  config.pin_dp = DP_INDEX;
+  config.pio_tx_num = 0; // 必要に応じて設定
+  config.pio_rx_num = 0; // 必要に応じて設定
+  // 他に必要な設定があればここで追加
+
   pio_usb_host_init(&config);
 
   // メインループ: USBパケット受信はコールバックで処理される

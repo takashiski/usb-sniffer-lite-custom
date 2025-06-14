@@ -13,7 +13,6 @@
 #include "usb_sniffer.pio.h"
 #include "tusb.h"
 #include "pico/binary_info.h"
-#include "usb_descriptors.h"
 
 /*- Definitions -------------------------------------------------------------*/
 #define USB_DMINUS_PIN 10
@@ -61,40 +60,98 @@ static void process_usb_samples(uint8_t *samples, int sample_len) {
     }
 }
 
+// 起動時メッセージとコマンド一覧
+void print_startup_message(void) {
+    tud_cdc_write_str("[UsbSnifferLite] 起動しました\r\n");
+    tud_cdc_write_str("コマンド一覧:\r\n");
+    tud_cdc_write_str("  s: キャプチャ開始\r\n");
+    tud_cdc_write_str("  t: キャプチャ停止\r\n");
+    tud_cdc_write_str("\r\n");
+    tud_cdc_write_flush();
+}
+
 // TinyUSB CDC受信コールバック
 void tud_cdc_rx_cb(uint8_t itf) {
-    uint8_t buf[64];
+    char buf[8];
     uint32_t count = tud_cdc_n_read(itf, buf, sizeof(buf));
-    if (count > 0) {
-        if (count >= 5 && !memcmp(buf, "START", 5)) sniffing = true;
-        if (count >= 4 && !memcmp(buf, "STOP", 4)) sniffing = false;
+    for (uint32_t i = 0; i < count; i++) {
+        if (buf[i] == 's') {
+            // キャプチャ開始
+            tud_cdc_write_str("キャプチャ開始\r\n");
+            tud_cdc_write_flush();
+            sniffing = true;
+        } else if (buf[i] == 't') {
+            // キャプチャ停止
+            tud_cdc_write_str("キャプチャ停止\r\n");
+            tud_cdc_write_flush();
+            sniffing = false;
+        }
     }
 }
 
-// TinyUSB用デバイス記述子コールバック
+// TinyUSB標準のデバイスディスクリプタ定義
+#include "tusb.h"
+
+static const tusb_desc_device_t desc_device = {
+    .bLength            = sizeof(tusb_desc_device_t),
+    .bDescriptorType    = TUSB_DESC_DEVICE,
+    .bcdUSB             = 0x0200,
+    .bDeviceClass       = TUSB_CLASS_MISC,
+    .bDeviceSubClass    = MISC_SUBCLASS_COMMON,
+    .bDeviceProtocol    = MISC_PROTOCOL_IAD,
+    .bMaxPacketSize0    = CFG_TUD_ENDPOINT0_SIZE,
+    .idVendor           = 0xCafe,
+    .idProduct          = 0x4000,
+    .bcdDevice          = 0x0100,
+    .iManufacturer      = 0x01,
+    .iProduct           = 0x02,
+    .iSerialNumber      = 0x03,
+    .bNumConfigurations = 0x01
+};
+
+// CDCのみの最小構成
+#define CONFIG_TOTAL_LEN    (TUD_CONFIG_DESC_LEN + TUD_CDC_DESC_LEN)
+
+static const uint8_t desc_configuration[] = {
+    TUD_CONFIG_DESCRIPTOR(1, 2, 0, CONFIG_TOTAL_LEN, 0, 100),
+    TUD_CDC_DESCRIPTOR(0, 4, 0x81, 8, 0x02, 0x82, 64)
+};
+
+static const char* desc_string[] = {
+    "",
+    "UsbSnifferLite", // Manufacturer
+    "RP2040 USB Sniffer", // Product
+    "123456", // Serial
+    "CDC Interface" // CDC
+};
+
+// コールバック実装
 uint8_t const *tud_descriptor_device_cb(void) {
-    return (uint8_t const *)&usb_device_descriptor;
+    return (uint8_t const *)&desc_device;
 }
 
 uint8_t const *tud_descriptor_configuration_cb(uint8_t index) {
     (void)index;
-    return (uint8_t const *)&usb_configuration_hierarchy;
+    return desc_configuration;
 }
 
 uint16_t const *tud_descriptor_string_cb(uint8_t index, uint16_t langid) {
     static uint16_t desc_str[32];
+    uint8_t chr_count;
     (void)langid;
     if (index == 0) {
-        desc_str[0] = (USB_STRING_DESCRIPTOR << 8) | 0x02;
         desc_str[1] = 0x0409;
-        return desc_str;
+        chr_count = 1;
+    } else {
+        const char *str = (index < sizeof(desc_string)/sizeof(desc_string[0])) ? desc_string[index] : NULL;
+        if (!str) return NULL;
+        chr_count = (uint8_t)strlen(str);
+        if (chr_count > 31) chr_count = 31;
+        for (uint8_t i = 0; i < chr_count; i++) {
+            desc_str[1 + i] = str[i];
+        }
     }
-    const char *str = (index < USB_STR_COUNT) ? usb_strings[index] : NULL;
-    if (!str) return NULL;
-    size_t len = strlen(str);
-    if (len > 31) len = 31;
-    desc_str[0] = (USB_STRING_DESCRIPTOR << 8) | ((len + 1) * 2);
-    for (size_t i = 0; i < len; i++) desc_str[i + 1] = str[i];
+    desc_str[0] = (TUSB_DESC_STRING << 8) | (2 * chr_count + 2);
     return desc_str;
 }
 
@@ -112,6 +169,8 @@ int main() {
 
     uint8_t sample_buf[USB_SAMPLE_BUF_SIZE];
     int sample_ptr = 0;
+
+    print_startup_message();
 
     while (true) {
         tud_task();

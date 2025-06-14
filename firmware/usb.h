@@ -7,7 +7,6 @@
 /*- Includes ----------------------------------------------------------------*/
 #include <stdint.h>
 #include <stdbool.h>
-#include "usb_std.h"
 
 /*- Definitions -------------------------------------------------------------*/
 #define USB_EP_NUM     16
@@ -16,7 +15,6 @@
 void usb_hw_init(void);
 void usb_attach(void);
 void usb_detach(void);
-void usb_configure_endpoint(usb_endpoint_descriptor_t *ep_desc);
 bool usb_endpoint_configured(int ep, int dir);
 int usb_endpoint_get_status(int ep, int dir);
 void usb_endpoint_set_feature(int ep, int dir);

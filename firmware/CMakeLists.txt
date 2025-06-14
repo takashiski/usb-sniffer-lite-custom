@@ -17,7 +17,6 @@ pico_sdk_init()
 set(SRC_FILES
     main.c
     usb_sniffer.pio
-    usb_descriptors.c
 )
 
 # 実行ファイル生成

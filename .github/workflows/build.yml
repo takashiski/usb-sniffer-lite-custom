@@ -34,19 +34,19 @@ jobs:
           git clone --depth=1 https://github.com/raspberrypi/pico-sdk.git $HOME/pico-sdk
           echo "PICO_SDK_PATH=$HOME/pico-sdk" >> $GITHUB_ENV
 
-      - name: Build firmware (Makefile)
-        run: |
-          cd firmware/make
-          make
-        env:
-          PICO_SDK_PATH: ${{ env.PICO_SDK_PATH }}
-
       - name: Build firmware (CMake)
         run: |
           mkdir -p firmware/build
           cd firmware/build
           cmake -DPICO_SDK_PATH=$PICO_SDK_PATH ..
           make -j$(nproc)
+        env:
+          PICO_SDK_PATH: ${{ env.PICO_SDK_PATH }}
+
+      - name: Build firmware (Makefile)
+        run: |
+          cd firmware/make
+          make
         env:
           PICO_SDK_PATH: ${{ env.PICO_SDK_PATH }}
 

@@ -1,0 +1,8 @@
+; USB D+/D-信号をサンプリングする簡易PIOプログラム
+.program usb_sniffer
+.side_set 0
+
+pull block      ; データレジスタに値がなければ待機
+in pins, 2      ; D+/D-の2bitを入力
+push block      ; FIFOにプッシュ
+jmp usb_sniffer ; ループ

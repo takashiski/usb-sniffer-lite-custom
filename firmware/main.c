@@ -2,317 +2,104 @@
 // Copyright (c) 2022, Alex Taradov <alex@taradov.com>. All rights reserved.
 
 /*- Includes ----------------------------------------------------------------*/
+#include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
-#include "rp2040.h"
-#include "hal_gpio.h"
-#include "capture.h"
-#include "globals.h"
-#include "utils.h"
-#include "usb.h"
-#include "pico/binary_info.h"
+#include "pico/stdlib.h"
+#include "hardware/pio.h"
+#include "hardware/irq.h"
+#include "usb_sniffer.pio.h"
+#include "tusb.h"
 
 /*- Definitions -------------------------------------------------------------*/
-#define F_REF      12000000
-#define F_CPU      120000000
-#define F_PER      120000000
-#define F_RTC      (F_REF / 256)
-#define F_TICK     1000000
-
-#define USB_BUFFER_SIZE    64
-#define VCP_TIMEOUT        10000 // us
-#define STATUS_TIMEOUT     500000 // us
-
-HAL_GPIO_PIN(LED_O, 0, 25, sio_25)
-HAL_GPIO_PIN(LED_R, 0, 26, sio_26)
+#define USB_DMINUS_PIN 10
+#define USB_DPLUS_PIN  11
+#define CDC_BUF_SIZE   64
+#define USB_SAMPLE_BUF_SIZE 128
 
 /*- Variables ---------------------------------------------------------------*/
-static uint8_t app_recv_buffer[USB_BUFFER_SIZE];
-static uint8_t app_send_buffer[USB_BUFFER_SIZE];
-static int app_send_buffer_ptr = 0;
-static bool app_send_zlp = false;
-static bool app_send_pending = false;
-static bool app_recv_pending = false;
-static bool app_vcp_open = false;
+volatile bool sniffing = false;
+
+// NRZIデコード用の状態
+static uint8_t prev_nrzi = 0;
+static uint8_t bit_buf = 0;
+static int bit_count = 0;
 
 /*- Implementations ---------------------------------------------------------*/
 
 //-----------------------------------------------------------------------------
-static void sys_init(void)
-{
-  // Enable XOSC
-  XOSC->CTRL     = (XOSC_CTRL_FREQ_RANGE_1_15MHZ << XOSC_CTRL_FREQ_RANGE_Pos);
-  XOSC->STARTUP  = 47; // ~1 ms @ 12 MHz
-  XOSC_SET->CTRL = (XOSC_CTRL_ENABLE_ENABLE << XOSC_CTRL_ENABLE_Pos);
-  while (0 == (XOSC->STATUS & XOSC_STATUS_STABLE_Msk));
-
-  // Setup SYS PLL for 12 MHz * 40 / 4 / 1 = 120 MHz
-  RESETS_CLR->RESET = RESETS_RESET_pll_sys_Msk;
-  while (0 == RESETS->RESET_DONE_b.pll_sys);
-
-  PLL_SYS->CS = (1 << PLL_SYS_CS_REFDIV_Pos);
-  PLL_SYS->FBDIV_INT = 40;
-  PLL_SYS->PRIM = (4 << PLL_SYS_PRIM_POSTDIV1_Pos) | (1 << PLL_SYS_PRIM_POSTDIV2_Pos);
-
-  PLL_SYS_CLR->PWR = PLL_SYS_PWR_VCOPD_Msk | PLL_SYS_PWR_PD_Msk;
-  while (0 == PLL_SYS->CS_b.LOCK);
-
-  PLL_SYS_CLR->PWR = PLL_SYS_PWR_POSTDIVPD_Msk;
-
-  // Setup USB PLL for 12 MHz * 36 / 3 / 3 = 48 MHz
-  RESETS_CLR->RESET = RESETS_RESET_pll_usb_Msk;
-  while (0 == RESETS->RESET_DONE_b.pll_usb);
-
-  PLL_USB->CS = (1 << PLL_SYS_CS_REFDIV_Pos);
-  PLL_USB->FBDIV_INT = 36;
-  PLL_USB->PRIM = (3 << PLL_SYS_PRIM_POSTDIV1_Pos) | (3 << PLL_SYS_PRIM_POSTDIV2_Pos);
-
-  PLL_USB_CLR->PWR = PLL_SYS_PWR_VCOPD_Msk | PLL_SYS_PWR_PD_Msk;
-  while (0 == PLL_USB->CS_b.LOCK);
-
-  PLL_USB_CLR->PWR = PLL_SYS_PWR_POSTDIVPD_Msk;
-
-  // Switch clocks to their final socurces
-  CLOCKS->CLK_REF_CTRL = (CLOCKS_CLK_REF_CTRL_SRC_xosc_clksrc << CLOCKS_CLK_REF_CTRL_SRC_Pos);
-
-  CLOCKS->CLK_SYS_CTRL = (CLOCKS_CLK_SYS_CTRL_AUXSRC_clksrc_pll_sys << CLOCKS_CLK_SYS_CTRL_AUXSRC_Pos);
-  CLOCKS_SET->CLK_SYS_CTRL = (CLOCKS_CLK_SYS_CTRL_SRC_clksrc_clk_sys_aux << CLOCKS_CLK_SYS_CTRL_SRC_Pos);
-
-  CLOCKS->CLK_PERI_CTRL = CLOCKS_CLK_PERI_CTRL_ENABLE_Msk |
-      (CLOCKS_CLK_PERI_CTRL_AUXSRC_clk_sys << CLOCKS_CLK_PERI_CTRL_AUXSRC_Pos);
-
-  CLOCKS->CLK_USB_CTRL = CLOCKS_CLK_USB_CTRL_ENABLE_Msk |
-      (CLOCKS_CLK_USB_CTRL_AUXSRC_clksrc_pll_usb << CLOCKS_CLK_USB_CTRL_AUXSRC_Pos);
-
-  CLOCKS->CLK_ADC_CTRL = CLOCKS_CLK_ADC_CTRL_ENABLE_Msk |
-      (CLOCKS_CLK_ADC_CTRL_AUXSRC_clksrc_pll_usb << CLOCKS_CLK_ADC_CTRL_AUXSRC_Pos);
-
-  CLOCKS->CLK_RTC_DIV = (256 << CLOCKS_CLK_RTC_DIV_INT_Pos); // 12MHz / 256 = 46875 Hz
-  CLOCKS->CLK_RTC_CTRL = CLOCKS_CLK_RTC_CTRL_ENABLE_Msk |
-      (CLOCKS_CLK_RTC_CTRL_AUXSRC_xosc_clksrc << CLOCKS_CLK_ADC_CTRL_AUXSRC_Pos);
-
-  // Configure 1 us tick for watchdog and timer
-  WATCHDOG->TICK = ((F_REF/F_TICK) << WATCHDOG_TICK_CYCLES_Pos) | WATCHDOG_TICK_ENABLE_Msk;
-
-  // Enable GPIOs
-  RESETS_CLR->RESET = RESETS_RESET_io_bank0_Msk | RESETS_RESET_pads_bank0_Msk;
-  while (0 == RESETS->RESET_DONE_b.io_bank0 || 0 == RESETS->RESET_DONE_b.pads_bank0);
+static int nrzi_decode(uint8_t dplus, uint8_t dminus) {
+    uint8_t curr = (dplus << 1) | dminus;
+    int bit = (curr != prev_nrzi) ? 1 : 0;
+    prev_nrzi = curr;
+    return bit;
 }
 
-//-----------------------------------------------------------------------------
-static void serial_number_init(void)
-{
-  volatile uint8_t *uid = (volatile uint8_t *)0x20041f01;
-  uint32_t sn = 5381;
-
-  for (int i = 0; i < 16; i++)
-    sn = ((sn << 5) + sn) ^ uid[i];
-
-  for (int i = 0; i < 8; i++)
-    usb_serial_number[i] = "0123456789ABCDEF"[(sn >> (i * 4)) & 0xf];
-
-  usb_serial_number[8] = 0;
-}
-
-//-----------------------------------------------------------------------------
-static void timer_init(void)
-{
-  RESETS_CLR->RESET = RESETS_RESET_timer_Msk;
-  while (0 == RESETS->RESET_DONE_b.timer);
-
-  TIMER->ALARM0 = TIMER->TIMELR + STATUS_TIMEOUT;
-}
-
-//-----------------------------------------------------------------------------
-static void status_timer_task(void)
-{
-  if (TIMER->INTR & TIMER_INTR_ALARM_0_Msk)
-  {
-    TIMER->INTR = TIMER_INTR_ALARM_0_Msk;
-    TIMER->ALARM0 = TIMER->TIMELR + STATUS_TIMEOUT;
-    HAL_GPIO_LED_O_toggle();
-  }
-}
-
-//-----------------------------------------------------------------------------
-static void reset_vcp_timeout(void)
-{
-  TIMER->ALARM1 = TIMER->TIMELR + VCP_TIMEOUT;
-}
-
-//-----------------------------------------------------------------------------
-static bool vcp_timeout(void)
-{
-  if (TIMER->INTR & TIMER_INTR_ALARM_1_Msk)
-  {
-    TIMER->INTR = TIMER_INTR_ALARM_1_Msk;
-    return true;
-  }
-  return false;
-}
-
-//-----------------------------------------------------------------------------
-static void send_buffer(void)
-{
-  usb_cdc_send(app_send_buffer, app_send_buffer_ptr);
-
-  app_send_zlp = (USB_BUFFER_SIZE == app_send_buffer_ptr);
-  app_send_pending = true;
-  app_send_buffer_ptr = 0;
-}
-
-//-----------------------------------------------------------------------------
-void usb_cdc_send_callback(void)
-{
-  app_send_pending = false;
-}
-
-//-----------------------------------------------------------------------------
-static void display_task(void)
-{
-  if (!app_vcp_open)
-  {
-    while (SIO->FIFO_ST & SIO_FIFO_ST_VLD_Msk)
-      (void)SIO->FIFO_RD;
-    return;
-  }
-
-  if (app_send_pending)
-    return;
-
-  while (SIO->FIFO_ST & SIO_FIFO_ST_VLD_Msk)
-  {
-    app_send_buffer[app_send_buffer_ptr++] = SIO->FIFO_RD;
-
-    reset_vcp_timeout();
-
-    if (USB_BUFFER_SIZE == app_send_buffer_ptr)
-    {
-      send_buffer();
-      break;
+// サンプルバッファからバイト列を生成しCDC送信
+static void process_usb_samples(uint8_t *samples, int sample_len) {
+    static uint8_t cdc_buf[CDC_BUF_SIZE];
+    static int cdc_ptr = 0;
+    for (int i = 0; i < sample_len; i++) {
+        uint8_t d = samples[i];
+        int bit = nrzi_decode((d >> 1) & 1, d & 1);
+        bit_buf = (bit_buf >> 1) | (bit ? 0x80 : 0x00); // LSBファースト
+        bit_count++;
+        if (bit_count == 8) {
+            cdc_buf[cdc_ptr++] = bit_buf;
+            bit_count = 0;
+            bit_buf = 0;
+            if (cdc_ptr >= CDC_BUF_SIZE) {
+                tud_cdc_write(cdc_buf, CDC_BUF_SIZE);
+                tud_cdc_write_flush();
+                cdc_ptr = 0;
+            }
+        }
     }
-  }
 }
 
 //-----------------------------------------------------------------------------
-static void vcp_timer_task(void)
-{
-  if (vcp_timeout())
-  {
-    if (app_send_zlp || app_send_buffer_ptr)
-      send_buffer();
-  }
-}
-
-//-----------------------------------------------------------------------------
-void usb_cdc_line_coding_updated(usb_cdc_line_coding_t *line_coding)
-{
-  (void)line_coding;
-}
-
-//-----------------------------------------------------------------------------
-void usb_cdc_control_line_state_update(int line_state)
-{
-  app_vcp_open = (line_state & USB_CDC_CTRL_SIGNAL_DTE_PRESENT);
-
-  if (!app_vcp_open)
-    return;
-
-  app_send_buffer_ptr = 0;
-
-  capture_command('h');
-
-  if (!app_recv_pending)
-  {
-    app_recv_pending = true;
-    usb_cdc_recv(app_recv_buffer, sizeof(app_recv_buffer));
-  }
-}
-
-//-----------------------------------------------------------------------------
-static char lower(char c)
-{
-  if ('A' <= c && c <= 'Z')
-    return c - ('A' - 'a');
-  return c;
-}
-
-//-----------------------------------------------------------------------------
-void usb_cdc_recv_callback(int size)
-{
-  app_recv_pending = false;
-
-  if (!app_vcp_open)
-    return;
-
-  for (int i = 0; i < size; i++)
-  {
-    char c = lower(app_recv_buffer[i]);
-    if (c == 'm') {
-        // mコマンドで逐次送信モード切替
-        g_capture_stream_mode = !g_capture_stream_mode;
-        capture_set_stream_mode(g_capture_stream_mode);
-        if (g_capture_stream_mode)
-            usb_cdc_send((uint8_t*)"Stream mode: ON\r\n", 17);
-        else
-            usb_cdc_send((uint8_t*)"Stream mode: OFF\r\n", 18);
-    } else {
-        capture_command(c);
+void on_cdc_rx(void) {
+    uint8_t buf[64];
+    uint32_t count = tud_cdc_n_read(0, buf, sizeof(buf));
+    if (count > 0) {
+        if (count >= 5 && !memcmp(buf, "START", 5)) sniffing = true;
+        if (count >= 4 && !memcmp(buf, "STOP", 4)) sniffing = false;
     }
-  }
-
-  app_recv_pending = true;
-  usb_cdc_recv(app_recv_buffer, sizeof(app_recv_buffer));
 }
 
 //-----------------------------------------------------------------------------
-bool usb_class_handle_request(usb_request_t *request)
-{
-  if (usb_cdc_handle_request(request))
-    return true;
-  else
-    return false;
-}
+int main() {
+    stdio_init_all();
+    tusb_init();
+    PIO pio = pio0;
+    uint sm = 0;
+    uint offset = pio_add_program(pio, &usb_sniffer_program);
+    usb_sniffer_program_init(pio, sm, offset, USB_DMINUS_PIN, USB_DPLUS_PIN);
+    tud_cdc_set_rx_cb(on_cdc_rx);
 
-//-----------------------------------------------------------------------------
-void usb_configuration_callback(int config)
-{
-  (void)config;
-}
+    uint8_t sample_buf[USB_SAMPLE_BUF_SIZE];
+    int sample_ptr = 0;
 
-//-----------------------------------------------------------------------------
-void set_error(bool error)
-{
-  HAL_GPIO_LED_R_write(error);
-}
-
-//-----------------------------------------------------------------------------
-int main(void)
-{
-  sys_init();
-  timer_init();
-  usb_init();
-  usb_cdc_init();
-  serial_number_init();
-  capture_init();
-
-  HAL_GPIO_LED_O_out();
-  HAL_GPIO_LED_O_clr();
-
-  HAL_GPIO_LED_R_out();
-  HAL_GPIO_LED_R_clr();
-
-  while (1)
-  {
-    usb_task();
-    display_task();
-    vcp_timer_task();
-    status_timer_task();
-  }
-
-  return 0;
+    while (true) {
+        tud_task();
+        if (sniffing) {
+            while (!pio_sm_is_rx_fifo_empty(pio, sm)) {
+                uint32_t sample = pio_sm_get(pio, sm) & 0x03; // D+/D-の2bit
+                sample_buf[sample_ptr++] = (uint8_t)sample;
+                if (sample_ptr >= USB_SAMPLE_BUF_SIZE) {
+                    process_usb_samples(sample_buf, sample_ptr);
+                    sample_ptr = 0;
+                }
+            }
+        } else {
+            sample_ptr = 0; // 停止時はバッファをクリア
+            bit_count = 0;
+            bit_buf = 0;
+        }
+    }
+    return 0;
 }
 
 // プログラム名と説明をバイナリ情報として埋め込む

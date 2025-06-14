@@ -1,18 +1,15 @@
 #!/bin/bash
-# Raspberry Pi Pico用ファームウェア ビルドスクリプト
+# Raspberry Pi Pico用ファームウェア CMakeビルドスクリプト
 # 推奨実行方法: bash build.sh
 #
 # 必要パッケージ: cmake, make, gcc-arm-none-eabi, build-essential
 # 必要環境変数: PICO_SDK_PATH（自動設定可）
-#
-# エラー時は即終了します
 set -e
 
 # --- 設定 ---
 FIRMWARE_DIR="$(cd "$(dirname "$0")" && pwd)"
 BUILD_DIR="$FIRMWARE_DIR/build"
 PICO_SDK_PATH_DEFAULT="$HOME/pico-sdk"
-TOOLCHAIN_FILE="$PICO_SDK_PATH_DEFAULT/cmake/preload/toolchains/pico_arm_cortex_m0plus_gcc.cmake"
 
 # --- PICO_SDK_PATHの自動設定 ---
 if [ -z "$PICO_SDK_PATH" ]; then
@@ -45,24 +42,18 @@ for arg in "$@"; do
     echo "  clean : ビルドディレクトリを初期化してクリーンビルド"
     exit 0
   fi
-  # 他のオプションがあればここで処理
 done
 
 if [ $CLEAN_BUILD -eq 1 ]; then
-  echo "ビルドディレクトリを初期化します: $BUILD_DIR"
+  echo "ビルドディレクトリを初期化します..."
   rm -rf "$BUILD_DIR"
 fi
+
 mkdir -p "$BUILD_DIR"
 cd "$BUILD_DIR"
 
-# --- CMake実行 ---
-echo "CMake構成を開始します..."
-CC=arm-none-eabi-gcc CXX=arm-none-eabi-g++ cmake .. \
-  -DPICO_SDK_PATH="$PICO_SDK_PATH" \
-  -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN_FILE"
-
-# --- make実行 ---
-echo "ビルドを開始します..."
+cmake -DPICO_SDK_PATH="$PICO_SDK_PATH" ..
 make -j$(nproc)
 
-echo "ビルドが完了しました。"
+cd "$FIRMWARE_DIR"
+echo "ビルド完了: build/UsbSnifferLite.elf.uf2 などを確認してください。"

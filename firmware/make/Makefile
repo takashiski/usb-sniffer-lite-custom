@@ -28,41 +28,21 @@ LDFLAGS += -nostartfiles
 LDFLAGS += -Wl,--gc-sections
 LDFLAGS += -Wl,--script=../linker/rp2040.ld
 
-INCLUDES += \
+SRCS = \
+  ../main.c \
+  ../startup_rp2040.c
+
+INCLUDES = \
   -I../include \
   -I.. \
-  -I../pico-pio-usb/src \
-  -I$(PICO_SDK_PATH)/src/common/include \
-  -I$(PICO_SDK_PATH)/src/rp2_common/hardware_sync/include \
-  -I$(PICO_SDK_PATH)/src/rp2_common/hardware_base/include \
-  -I$(PICO_SDK_PATH)/src/boards/include \
-  -I$(PICO_SDK_PATH)/src/rp2040/hardware_regs/include \
-  -I$(PICO_SDK_PATH)/src/rp2_common/pico_platform/include \
-  -I$(PICO_SDK_PATH)/src/host/pico_include \
-  -I$(PICO_SDK_PATH)/src/rp2_common/pico_stdlib/include \
-  -I$(PICO_SDK_PATH)/src/common/pico_base_headers/include \
-  -I$(PICO_SDK_PATH)/src/boards/include/boards \
-
-SRCS += \
-  ../main.c \
-  ../utils.c \
-  ../capture.c \
-  ../display.c \
-  ../usb.c \
-  ../usb_std.c \
-  ../usb_cdc.c \
-  ../usb_descriptors.c \
-  ../startup_rp2040.c \
-  ../pico-pio-usb/src/pio_usb_host.c \
-  ../pico-pio-usb/src/pio_usb.c
 
 DEFINES += \
 
 CFLAGS += $(INCLUDES) $(DEFINES)
 
-OBJS = $(addprefix $(BUILD)/, $(notdir %/$(subst .c,.o, $(SRCS))))
+OBJS = $(addprefix $(BUILD)/, $(notdir $(SRCS:.c=.o)))
 
-all: directory $(BUILD)/$(BIN).elf $(BUILD)/$(BIN).hex $(BUILD)/$(BIN).bin $(BUILD)/$(BIN).uf2 release size
+all: directory $(BUILD)/$(BIN).elf $(BUILD)/$(BIN).hex $(BUILD)/$(BIN).bin $(BUILD)/$(BIN).uf2 size
 
 $(BUILD)/$(BIN).elf: $(OBJS)
 	@echo LD $@

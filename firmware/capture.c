@@ -103,6 +103,41 @@ int g_capture_stream_mode = 0; // 0:バッファ一括, 1:逐次送信
 
 void capture_set_stream_mode(int mode) { g_capture_stream_mode = mode; }
 
+static const char *capture_speed_str[CaptureSpeedCount] = {
+  [CaptureSpeed_Low]  = "Low",
+  [CaptureSpeed_Full] = "Full",
+};
+static const char *capture_trigger_str[CaptureTriggerCount] = {
+  [CaptureTrigger_Enabled]  = "Enabled",
+  [CaptureTrigger_Disabled] = "Disabled",
+};
+static const char *capture_limit_str[CaptureLimitCount] = {
+  [CaptureLimit_100]       = "100 packets",
+  [CaptureLimit_200]       = "200 packets",
+  [CaptureLimit_500]       = "500 packets",
+  [CaptureLimit_1000]      = "1000 packets",
+  [CaptureLimit_2000]      = "2000 packets",
+  [CaptureLimit_5000]      = "5000 packets",
+  [CaptureLimit_10000]     = "10000 packets",
+  [CaptureLimit_Unlimited] = "Unlimited",
+};
+static const char *display_time_str[DisplayTimeCount] = {
+  [DisplayTime_First]    = "Relative to the first packet",
+  [DisplayTime_Previous] = "Relative to the previous packet",
+  [DisplayTime_SOF]      = "Relative to the SOF",
+  [DisplayTime_Reset]    = "Relative to the bus reset",
+};
+static const char *display_data_str[DisplayDataCount] = {
+  [DisplayData_Full]    = "Full",
+  [DisplayData_Limit16] = "Limit to 16 bytes",
+  [DisplayData_Limit64] = "Limit to 64 bytes",
+  [DisplayData_None]    = "Do not display data",
+};
+static const char *display_fold_str[DisplayFoldCount] = {
+  [DisplayFold_Enabled]  = "Enabled",
+  [DisplayFold_Disabled] = "Disabled",
+};
+
 /*- Implementations ---------------------------------------------------------*/
 
 //-----------------------------------------------------------------------------
@@ -265,6 +300,13 @@ static void process_packet(int size)
   g_wr_ptr += (out_size + 3) / 4;
 }
 
+static int poll_cmd(void)
+{
+  if (SIO->FIFO_ST & SIO_FIFO_ST_VLD_Msk)
+    return SIO->FIFO_RD;
+  return 0;
+}
+static bool superBreak;
 //-----------------------------------------------------------------------------
 void capture_buffer()
 {
@@ -403,4 +445,25 @@ void capture_command(int cmd)
 {
   if (SIO->FIFO_ST & SIO_FIFO_ST_RDY_Msk)
     SIO->FIFO_WR = cmd;
+}
+
+//----------------------------------------------------------------------------- 
+static void display_packet_direct(int wr_ptr, int time_offset)
+{
+  // パケットを直接表示する関数（実装例）
+  // 必要に応じて内容を記述
+  int ftime = 0; // 未使用警告抑制用
+  (void)ftime;
+  (void)wr_ptr;
+  (void)time_offset;
+}
+
+//----------------------------------------------------------------------------- 
+void print_data(const char *pid, uint8_t *data, int size)
+{
+  // データ表示の実装例
+  (void)pid;
+  (void)data;
+  (void)size;
+  // 必要に応じて内容を記述
 }

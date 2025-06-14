@@ -41,7 +41,9 @@ SRCS += \
   ../usb_std.c \
   ../usb_cdc.c \
   ../usb_descriptors.c \
-  ../startup_rp2040.c
+  ../startup_rp2040.c \
+  ../pico-pio-usb/src/pio_usb_host.c \
+  ../pico-pio-usb/src/pio_usb.c
 
 DEFINES += \
 

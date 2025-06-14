@@ -12,6 +12,8 @@
 #include "capture.h"
 #include "display.h"
 #include "globals.h"
+#include "pico-pio-usb/src/pio_usb.h"
+#include "pico-pio-usb/src/pio_usb_host.h"
 
 /*- Definitions -------------------------------------------------------------*/
 #define CORE1_STACK_SIZE       512 // words
@@ -471,212 +473,25 @@ static void display_packet_direct(int wr_ptr, int time_offset) {
 }
 
 //-----------------------------------------------------------------------------
-static void capture_buffer()
+void capture_buffer()
 {
-  volatile uint32_t *PIO0_INSTR_MEM = (volatile uint32_t *)&PIO0->INSTR_MEM0;
-  volatile uint32_t *PIO1_INSTR_MEM = (volatile uint32_t *)&PIO1->INSTR_MEM0;
-  int index, packet;
-  bool first_packet = true;
-  uint32_t time_offset = 0;
-
-  HAL_GPIO_DP_init();
-  HAL_GPIO_DM_init();
-  HAL_GPIO_START_init();
-
-  RESETS_SET->RESET = RESETS_RESET_pio0_Msk | RESETS_RESET_pio1_Msk;
-  RESETS_CLR->RESET = RESETS_RESET_pio0_Msk | RESETS_RESET_pio1_Msk;
-  while (0 == RESETS->RESET_DONE_b.pio0 && 0 == RESETS->RESET_DONE_b.pio1);
-
-  g_buffer_info.fs = (g_capture_speed == CaptureSpeed_Full);
-  g_buffer_info.trigger = (g_capture_trigger == CaptureTrigger_Enabled);
-  g_buffer_info.limit = capture_limit_value();
-
-  static const uint16_t pio0_ops[] =
-  {
-    // idle:
-    /* 0 */  OP_MOV | MOV_DST_X | MOV_SRC_NULL | MOV_OP_INVERT,   // Reset the bit counter
-    /* 1 */  OP_WAIT | WAIT_POL_1 | WAIT_SRC_PIN | WAIT_INDEX(0), // Wait until the bus goes idle
-    /* 2 */  OP_WAIT | WAIT_POL_0 | WAIT_SRC_PIN | WAIT_INDEX(0), // Wait for the SOP
-
-    // start0:
-    /* 3 */  OP_NOP | OP_DELAY(1), // Skip to the middle of the bit
-
-    // read0:
-    /* 4 */  OP_JMP | JMP_COND_X_NZ_PD | JMP_ADDR(5/*next*/),  // Decrement the bit counter
-    /* 5 */  OP_IN  | IN_SRC_PINS | IN_CNT(1), // Sample D+
-    /* 6 */  OP_MOV | MOV_DST_OSR | MOV_SRC_PINS | MOV_OP_BIT_REV, // Sample D+ and D-
-    /* 7 */  OP_OUT | OUT_DST_Y | OUT_CNT(2),
-    /* 8 */  OP_JMP | JMP_COND_Y_ZERO | JMP_ADDR(21/*eop*/), // If both are 0, then it is an EOP
-    /* 9 */  OP_NOP | OP_DELAY(3), // Skip to the middle of the bit
-    /* 10 */ OP_JMP | JMP_COND_PIN | JMP_ADDR(4/*read0*/), // If D- is high, then D+ is low, read 0
-
-    // read1:
-    /* 11 */ OP_JMP | JMP_COND_X_NZ_PD | JMP_ADDR(12/*next*/), // Decrement the bit counter
-    /* 12 */ OP_IN  | IN_SRC_PINS | IN_CNT(1), // Sample D+
-    /* 13 */ OP_MOV | MOV_DST_OSR | MOV_SRC_PINS | MOV_OP_BIT_REV, // Sample D+ and D-
-    /* 14 */ OP_OUT | OUT_DST_Y | OUT_CNT(2),
-    /* 15 */ OP_JMP | JMP_COND_Y_ZERO | JMP_ADDR(21/*eop*/), // If both are 0, then it is an EOP
-    /* 16 */ OP_JMP | JMP_COND_PIN | JMP_ADDR(3/*start0*/),  // Look for a low to high transition on
-    /* 17 */ OP_JMP | JMP_COND_PIN | JMP_ADDR(3/*start0*/),  // D- to adjust the sample point location
-    /* 18 */ OP_JMP | JMP_COND_PIN | JMP_ADDR(3/*start0*/),
-    /* 19 */ OP_JMP | JMP_COND_PIN | JMP_ADDR(3/*start0*/),
-    /* 20 */ OP_JMP | JMP_ADDR(11/*read1*/),
-
-    // eop:
-    /* 21 */ OP_PUSH, // Transfer the last data
-    /* 22 */ OP_MOV | MOV_DST_ISR | MOV_SRC_X, // Transfer the bit count
-    /* 23 */ OP_PUSH,
-
-    // poll_reset:
-    /* 24 */ OP_SET | SET_DST_X | SET_DATA(31),
-
-    // poll_loop:
-    /* 25 */ OP_MOV | MOV_DST_OSR | MOV_SRC_PINS | MOV_OP_BIT_REV, // Sample D+ and D-
-    /* 26 */ OP_OUT | OUT_DST_Y | OUT_CNT(2),
-    /* 27 */ OP_JMP | JMP_COND_Y_NZ_PD | JMP_ADDR(0/*idle*/), // If either is not zero, back to idle
-    /* 28 */ OP_JMP | JMP_COND_X_NZ_PD | JMP_ADDR(25/*poll_loop*/),
-    /* 29 */ OP_MOV | MOV_DST_ISR | MOV_SRC_NULL | MOV_OP_INVERT,
-    /* 30 */ OP_PUSH,
-    // Wrap to 0 from here
-
-    // Entry point, wait for a START signal from the PIO1
-    /* 31 */ OP_WAIT | WAIT_POL_1 | WAIT_SRC_PIN | WAIT_INDEX(2),
+  // pico-pio-usbの初期化
+  pio_usb_configuration_t config = {
+      .sm = 0,
+      .pin_dp = DP_INDEX,
+      .pin_dm = DM_INDEX,
+      .pio = pio0,
+      .host_callback = usb_packet_callback,
   };
+  pio_usb_host_init(&config);
 
-  static const uint16_t pio1_ops[] =
-  {
-    /* 0 */  OP_NOP | OP_DELAY(31), // Wait for the PIO0 to start
-    /* 1 */  OP_NOP | OP_DELAY(31),
-    /* 2 */  OP_NOP | OP_DELAY(31),
-    /* 3 */  OP_NOP | OP_DELAY(31),
-
-    // wait_se0:
-    /* 4 */  OP_MOV | MOV_DST_OSR | MOV_SRC_PINS | MOV_OP_BIT_REV,
-    /* 5 */  OP_OUT | OUT_DST_Y | OUT_CNT(2),
-    /* 6 */  OP_JMP | JMP_COND_Y_NZ_PD | JMP_ADDR(4/*wait_se0*/),
-
-    /* 7 */  OP_MOV | MOV_DST_OSR | MOV_SRC_PINS | MOV_OP_BIT_REV,
-    /* 8 */  OP_OUT | OUT_DST_Y | OUT_CNT(2),
-    /* 9 */  OP_JMP | JMP_COND_Y_NZ_PD | JMP_ADDR(4/*wait_se0*/),
-
-    /* 10 */ OP_MOV | MOV_DST_OSR | MOV_SRC_PINS | MOV_OP_BIT_REV,
-    /* 11 */ OP_OUT | OUT_DST_Y | OUT_CNT(2),
-    /* 12 */ OP_JMP | JMP_COND_Y_NZ_PD | JMP_ADDR(4/*wait_se0*/),
-
-    /* 13 */ OP_MOV | MOV_DST_OSR | MOV_SRC_PINS | MOV_OP_BIT_REV,
-    /* 14 */ OP_OUT | OUT_DST_Y | OUT_CNT(2),
-    /* 15 */ OP_JMP | JMP_COND_Y_NZ_PD | JMP_ADDR(4/*wait_se0*/),
-
-    /* 16 */ OP_SET | SET_DST_PINS | SET_DATA(1), // Set the START output
-    /* 17 */ OP_JMP | JMP_ADDR(17/*self*/), // Infinite loop
-  };
-
-  // PIO0 init
-  PIO0->SM0_CLKDIV = ((g_buffer_info.fs ? 1 : 8) << PIO0_SM0_CLKDIV_INT_Pos);
-
-  for (int i = 0; i < (int)(sizeof(pio0_ops)/sizeof(uint16_t)); i++)
-    PIO0_INSTR_MEM[i] = pio0_ops[i];
-
-  if (!g_buffer_info.fs)
-  {
-    PIO0_INSTR_MEM[1] = OP_WAIT | WAIT_POL_1 | WAIT_SRC_PIN | WAIT_INDEX(1);
-    PIO0_INSTR_MEM[2] = OP_WAIT | WAIT_POL_0 | WAIT_SRC_PIN | WAIT_INDEX(1);
-  }
-
-  PIO0->SM0_EXECCTRL = ((g_buffer_info.fs ? DM_INDEX : DP_INDEX) << PIO0_SM0_EXECCTRL_JMP_PIN_Pos) |
-      (30 << PIO0_SM0_EXECCTRL_WRAP_TOP_Pos) | (0 << PIO0_SM0_EXECCTRL_WRAP_BOTTOM_Pos);
-
-  PIO0->SM0_SHIFTCTRL = PIO0_SM0_SHIFTCTRL_FJOIN_RX_Msk | PIO0_SM0_SHIFTCTRL_AUTOPUSH_Msk |
-      (31 << PIO0_SM0_SHIFTCTRL_PUSH_THRESH_Pos);
-
-  PIO0->SM0_PINCTRL = (DP_INDEX << PIO0_SM0_PINCTRL_IN_BASE_Pos);
-
-  PIO0->SM0_INSTR = OP_JMP | JMP_ADDR(31);
-
-  // PIO1 init
-  PIO1->SM0_CLKDIV = ((g_buffer_info.fs ? 1 : 8) << PIO0_SM0_CLKDIV_INT_Pos);
-
-  for (int i = 0; i < (int)(sizeof(pio1_ops)/sizeof(uint16_t)); i++)
-    PIO1_INSTR_MEM[i] = pio1_ops[i];
-
-  PIO1->SM0_EXECCTRL  = (31 << PIO0_SM0_EXECCTRL_WRAP_TOP_Pos) | (0 << PIO0_SM0_EXECCTRL_WRAP_BOTTOM_Pos);
-  PIO1->SM0_SHIFTCTRL = 0;
-  PIO1->SM0_PINCTRL   = (DP_INDEX << PIO0_SM0_PINCTRL_IN_BASE_Pos) |
-      (START_INDEX << PIO0_SM0_PINCTRL_SET_BASE_Pos) | (1 << PIO0_SM0_PINCTRL_SET_COUNT_Pos);
-
-  PIO1->SM0_INSTR = OP_SET | SET_DST_PINDIRS | SET_DATA(1); // Clear the START output
-  PIO1->SM0_INSTR = OP_SET | SET_DST_PINS    | SET_DATA(0);
-
-  index = 2;
-  packet = 0;
-  g_buffer_info.count = 0;
-
-  set_error(false);
-
-  if (!wait_for_trigger())
-  {
-    //display_puts("Capture stopped\r\n");
-    return;
-  }
-
-  //display_puts("Capture started\r\n");
-
-  PIO1_SET->CTRL = (1 << (PIO0_CTRL_SM_ENABLE_Pos + 0));
-  PIO0_SET->CTRL = (1 << (PIO0_CTRL_SM_ENABLE_Pos + 0));
-
-  while (1)
-  {
-    if (0 == (PIO0->FSTAT & (1 << (PIO0_FSTAT_RXEMPTY_Pos + 0))))
-    {
-      uint32_t v = PIO0->RXF0;
-
-      if (v & 0x80000000)
-      {
-        g_buffer[packet+0] = 0xffffffff - v;
-        g_buffer[packet+1] = TIMER->TIMELR;
-        g_buffer_info.count++;
-        if (first_packet) { time_offset = g_buffer[packet+1]; first_packet = false; }
-        if (g_capture_stream_mode) {
-            // 逐次送信モード: 1パケット分を即時出力
-            display_packet_direct(packet, time_offset);
-        }
-        packet = index;
-        index += 2;
-
-        if (g_buffer_info.count == g_buffer_info.limit)
-        { 
-          superBreak = true;
-          break;
-        }
-      }
-      else
-      {
-        if (index < (BUFFER_SIZE-4)) // Reserve the space for a possible reset
-        {
-          g_buffer[index++] = v;
-        }
-        else
-        {
-          superBreak = true;
-          break;
-        }
-      }
-    } 
-
-    char command = poll_cmd();
-    if (command == 'p')
-      break;
-    else if (command == 'z')
-    {
-      superBreak = true;
-      break;
-    }
-
-  }
-
-  if (!g_capture_stream_mode) {
-      process_buffer();
-      display_buffer();
+  // メインループ: USBパケット受信はコールバックで処理される
+  while (1) {
+      // 必要に応じてコマンド受付やbreak条件をここで処理
+      char command = poll_cmd();
+      if (command == 'p') break;
+      else if (command == 'z') { superBreak = true; break; }
+      // pico-pio-usbのタスク処理（割り込み/ポーリング型の場合は不要なこともある）
   }
 }
 

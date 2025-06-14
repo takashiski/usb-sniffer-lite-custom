@@ -74,18 +74,15 @@ $(BUILD)/$(BIN).hex: $(BUILD)/$(BIN).elf
 
 $(BUILD)/$(BIN).bin: $(BUILD)/$(BIN).elf
 	@echo OBJCOPY $@
-	@$(OBJCOPY) -O binary $^ $@
+	@$(OBJCOPY) -O binary $^
 
 $(BUILD)/$(BIN).uf2: $(BUILD)/$(BIN).bin
-	@echo BIN2UF2 $@
-	@bin2uf2 -i $^ -o $@
+	@echo UF2 $@
+	@elf2uf2 $^ $@
 
-%.o:
-	@echo CC $@
-	@$(CC) $(CFLAGS) $(filter %/$(subst .o,.c,$(notdir $@)), $(SRCS)) -c -o $@
-
-release: $(BUILD)/$(BIN).uf2
+release: $(BUILD)/$(BIN).bin $(BUILD)/$(BIN).uf2
 	@echo release
+	@cp $(BUILD)/$(BIN).bin ../../bin/
 	@cp $(BUILD)/$(BIN).uf2 ../../bin/
 
 directory:
@@ -100,3 +97,5 @@ clean:
 	@-rm -rf $(BUILD)
 
 -include $(wildcard $(BUILD)/*.d)
+
+%.o:

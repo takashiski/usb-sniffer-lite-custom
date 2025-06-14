@@ -291,9 +291,6 @@ void set_error(bool error)
 //-----------------------------------------------------------------------------
 int main(void)
 {
-  bi_decl(bi_program_name("UsbSnifferLite"));
-  bi_decl(bi_program_description("USB Sniffer Lite Custom Firmware"));
-
   sys_init();
   timer_init();
   usb_init();
@@ -317,3 +314,7 @@ int main(void)
 
   return 0;
 }
+
+// プログラム名と説明をバイナリ情報として埋め込む
+bi_decl(bi_program_name("UsbSnifferLite"));
+bi_decl(bi_program_description("USB Sniffer Lite Custom Firmware"));

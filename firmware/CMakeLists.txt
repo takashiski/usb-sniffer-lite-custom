@@ -26,7 +26,6 @@ set(SRC_FILES
     usb_std.c
     usb_cdc.c
     usb_descriptors.c
-    startup_rp2040.c
 )
 
 # includeディレクトリ
@@ -37,21 +36,13 @@ include_directories(
 )
 
 # 実行ファイル生成
-add_executable(UsbSnifferLite ${SRC_FILES})
-target_link_libraries(UsbSnifferLite pico_stdlib pico_standard_binary_info)
-pico_add_extra_outputs(UsbSnifferLite)
+add_executable(UsbSnifferLite.elf ${SRC_FILES})
+target_link_libraries(UsbSnifferLite.elf pico_stdlib pico_pio_usb pico_standard_binary_info)
+pico_add_extra_outputs(UsbSnifferLite.elf)
 
 # リンカスクリプト指定
-# pico_set_linker_script(UsbSnifferLite ${CMAKE_CURRENT_SOURCE_DIR}/linker/rp2040.ld)
-
-# ライブラリリンク
-# pico-pio-usbはadd_subdirectoryでビルドされる
-# 必要に応じてtarget_link_librariesに追加
+# pico_set_linker_script(UsbSnifferLite.elf ${CMAKE_CURRENT_SOURCE_DIR}/linker/rp2040.ld)
 
 # Pico SDKの標準ライブラリをリンク
-pico_enable_stdio_usb(UsbSnifferLite 1)
-pico_enable_stdio_uart(UsbSnifferLite 0)
-target_link_libraries(UsbSnifferLite pico_stdlib pico_pio_usb)
-
-# UF2ファイル生成
-pico_add_extra_outputs(UsbSnifferLite)
+pico_enable_stdio_usb(UsbSnifferLite.elf 1)
+pico_enable_stdio_uart(UsbSnifferLite.elf 0)

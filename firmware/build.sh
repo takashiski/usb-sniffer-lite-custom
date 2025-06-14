@@ -35,14 +35,29 @@ for cmd in cmake make arm-none-eabi-gcc; do
 done
 
 # --- ビルドディレクトリのクリーン ---
-echo "ビルドディレクトリを初期化します: $BUILD_DIR"
-rm -rf "$BUILD_DIR"
+CLEAN_BUILD=0
+for arg in "$@"; do
+  if [ "$arg" = "clean" ]; then
+    CLEAN_BUILD=1
+  fi
+  if [ "$arg" = "help" ] || [ "$arg" = "--help" ] || [ "$arg" = "-h" ]; then
+    echo "Usage: bash build.sh [clean]"
+    echo "  clean : ビルドディレクトリを初期化してクリーンビルド"
+    exit 0
+  fi
+  # 他のオプションがあればここで処理
+done
+
+if [ $CLEAN_BUILD -eq 1 ]; then
+  echo "ビルドディレクトリを初期化します: $BUILD_DIR"
+  rm -rf "$BUILD_DIR"
+fi
 mkdir -p "$BUILD_DIR"
 cd "$BUILD_DIR"
 
 # --- CMake実行 ---
 echo "CMake構成を開始します..."
-cmake .. \
+CC=arm-none-eabi-gcc CXX=arm-none-eabi-g++ cmake .. \
   -DPICO_SDK_PATH="$PICO_SDK_PATH" \
   -DCMAKE_TOOLCHAIN_FILE="$TOOLCHAIN_FILE"
 

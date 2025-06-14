@@ -19,29 +19,28 @@ sudo apt install -y gcc-arm-none-eabi make cmake git
 git submodule update --init --recursive
 ```
 
-## 3. bin2uf2 ツールのビルドとインストール
-
-ファームウェアのビルドには `bin2uf2` ツールが必要です。以下の手順でインストールしてください。
-
-```bash
-git clone --depth=1 https://github.com/ataradov/tools.git ~/tools
-cd ~/tools/bin2uf2
-make
-sudo cp bin2uf2 /usr/local/bin/
-```
-
-## 4. ファームウェアのビルド
+## 3. ファームウェアのビルド
 
 以下のコマンドでファームウェアをビルドできます。
 
 ```bash
-cd firmware/make
-make
+cd firmware
+mkdir -p build
+cd build
+cmake ..
+make -j$(nproc)
 ```
 
-ビルドが成功すると、`../../bin/UsbSnifferLite.uf2` などのファイルが生成されます。
+または、ビルドスクリプトを使う場合は以下のコマンドでもOKです。
 
-## 5. Raspberry Pi Pico SDK のセットアップ
+```bash
+cd firmware
+bash build.sh clean
+```
+
+ビルドが成功すると、`UsbSnifferLite.elf.uf2` などのファイルが `firmware/build` ディレクトリに生成されます。
+
+## 4. Raspberry Pi Pico SDK のセットアップ
 
 一部の開発環境や拡張機能によっては Raspberry Pi Pico SDK のセットアップが必要になる場合があります。以下の手順でインストールできます。
 
@@ -55,7 +54,7 @@ SDKのパスを環境変数に設定する場合は、以下のコマンドを�
 export PICO_SDK_PATH=~/pico-sdk
 ```
 
-## 6. 補足
+## 5. 補足
 - その他詳細は `README.md` も参照してください。
 
 ---

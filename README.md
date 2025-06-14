@@ -129,7 +129,14 @@ cmake ..
 make -j$(nproc)
 ```
 
-5. ビルドが成功すると `UsbSnifferLite.uf2` などのファイルが `firmware/build` ディレクトリに生成されます。
+または、ビルドスクリプトを使う場合は以下のコマンドでもOKです。
+
+```bash
+cd firmware
+bash build.sh clean
+```
+
+5. ビルドが成功すると `UsbSnifferLite.elf.uf2` などのファイルが `firmware/build` ディレクトリに生成されます。
 
 ---
 

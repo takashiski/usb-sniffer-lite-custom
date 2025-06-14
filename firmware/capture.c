@@ -84,8 +84,14 @@ static const char *display_fold_str[DisplayFoldCount] = {
 //-----------------------------------------------------------------------------
 static int poll_cmd(void)
 {
-  if (SIO->FIFO_ST & SIO_FIFO_ST_VLD_Msk)
-    return SIO->FIFO_RD;
+  if (SIO->FIFO_ST & SIO_FIFO_ST_VLD_Msk) {
+    int c = SIO->FIFO_RD;
+    // 入力をそのままCOMポート(USB CDC)に投げ返す
+    char msg[8];
+    snprintf(msg, sizeof(msg), "%c", c);
+    usb_cdc_send((uint8_t*)msg, strlen(msg));
+    return c;
+  }
   return 0;
 }
 static bool superBreak;
@@ -103,11 +109,32 @@ void capture_buffer()
 
   // メインループ: USBパケット受信はコールバックで処理される
   while (1) {
-      // 必要に応じてコマンド受付やbreak条件をここで処理
       char command = poll_cmd();
       if (command == 'p') break;
       else if (command == 'z') { superBreak = true; break; }
-      // pico-pio-usbのタスク処理（割り込み/ポーリング型の場合は不要なこともある）
+
+      // 逐次送信モード
+      if (g_capture_stream_mode) {
+          // 新しいパケットがバッファに追加されたら逐次送信
+          if (g_buffer_info.count > 0) {
+              // 1パケット分をCOMポートに送信（例: print_dataで整形してusb_cdc_send）
+              // ここでは簡易例としてバッファ先頭を送信
+              // 実際はprint_data等で人間可読に整形して送信するのが望ましい
+              char msg[64];
+              snprintf(msg, sizeof(msg), "Packet: %08x\r\n", g_buffer[0]);
+              usb_cdc_send((uint8_t*)msg, strlen(msg));
+              g_buffer_info.count = 0; // 送信済みとしてクリア
+          }
+      } else {
+          // 一括送信モード
+          if (g_buffer_info.count > 0) {
+              // バッファ全体を人間可読に整形して一括送信
+              // 例: display_buffer()で整形し、usb_cdc_sendで送信
+              // display_buffer()はdisplay.cでCOMポート出力するので、
+              // ここではコマンドで呼び出すだけでもよい
+          }
+      }
+      // 必要に応じてウェイトや他の処理を追加
   }
 }
 
@@ -154,19 +181,20 @@ static void core1_main(void)
   HAL_GPIO_TRIGGER_in();
   HAL_GPIO_TRIGGER_pullup();
 
+  bool capturing = false;
+
   while (1)
   {
-    int cmd = poll_cmd();
-
-    if (cmd == 's')
-    {
-      while(!superBreak)
-        capture_buffer();
-      superBreak = false;
+    if (capturing) {
+      capture_buffer(); // 1回だけパケット取得・送信
     }
-    else if (cmd == 'p')
-      {} // Do nothing here, stop only works if the capture is running
-    else if (cmd == 'b')
+    int cmd = poll_cmd();
+    if (cmd == 's') {
+      capturing = true;
+    } else if (cmd == 'p' || cmd == 'z') {
+      capturing = false;
+      if (cmd == 'z') superBreak = true;
+    } else if (cmd == 'b')
       display_buffer();
     else if (cmd == 'h' || cmd == '?')
       print_help();
@@ -186,8 +214,6 @@ static void core1_main(void)
       g_capture_speed = CaptureSpeed_Full;
     else if (cmd == 'y')
       g_capture_speed = CaptureSpeed_Low;
-    else if (cmd == 'z')
-      {} // Do nothing here, stop only works if the capture is running
   }
 }
 

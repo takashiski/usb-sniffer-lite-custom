@@ -12,6 +12,7 @@
 #include "globals.h"
 #include "utils.h"
 #include "usb.h"
+#include "pico/binary_info.h"
 
 /*- Definitions -------------------------------------------------------------*/
 #define F_REF      12000000
@@ -290,6 +291,9 @@ void set_error(bool error)
 //-----------------------------------------------------------------------------
 int main(void)
 {
+  bi_decl(bi_program_name("UsbSnifferLite"));
+  bi_decl(bi_program_description("USB Sniffer Lite Custom Firmware"));
+
   sys_init();
   timer_init();
   usb_init();

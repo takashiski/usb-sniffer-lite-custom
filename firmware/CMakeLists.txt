@@ -27,7 +27,6 @@ set(SRC_FILES
     usb_cdc.c
     usb_descriptors.c
     startup_rp2040.c
-    binary_info.c
 )
 
 # includeディレクトリ
@@ -39,6 +38,8 @@ include_directories(
 
 # 実行ファイル生成
 add_executable(UsbSnifferLite ${SRC_FILES})
+target_link_libraries(UsbSnifferLite pico_stdlib pico_standard_binary_info)
+pico_add_extra_outputs(UsbSnifferLite)
 
 # リンカスクリプト指定
 # pico_set_linker_script(UsbSnifferLite ${CMAKE_CURRENT_SOURCE_DIR}/linker/rp2040.ld)

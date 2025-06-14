@@ -1,4 +1,5 @@
 #include "pico/binary_info.h"
 
-// バイナリ情報を先頭256バイト以内に配置するためのマクロ
-PICO_DEFINE_BINARY_INFO(UsbSnifferLite, "USB Sniffer Lite Custom Firmware");
+// プログラム名と説明をバイナリ情報として埋め込む
+bi_decl(bi_program_name("UsbSnifferLite"));
+bi_decl(bi_program_description("USB Sniffer Lite Custom Firmware"));

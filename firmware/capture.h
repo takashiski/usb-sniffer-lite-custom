@@ -40,5 +40,7 @@ typedef struct
 /*- Prototypes --------------------------------------------------------------*/
 void capture_init(void);
 void capture_command(int cmd);
+void capture_set_immediate_send_mode(bool enable);
+void send_data0_packet_if_needed(uint8_t *out_data, int out_size);
 
 #endif // _CAPTURE_H_

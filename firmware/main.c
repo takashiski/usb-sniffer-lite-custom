@@ -12,6 +12,7 @@
 #include "globals.h"
 #include "utils.h"
 #include "usb.h"
+#include "usb_cdc.h"
 
 /*- Definitions -------------------------------------------------------------*/
 #define F_REF      12000000
@@ -289,6 +290,8 @@ int main(void)
 
   HAL_GPIO_LED_R_out();
   HAL_GPIO_LED_R_clr();
+
+  capture_set_immediate_send_mode(true); // デフォルトでON
 
   while (1)
   {

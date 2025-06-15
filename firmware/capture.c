@@ -12,6 +12,7 @@
 #include "capture.h"
 #include "display.h"
 #include "globals.h"
+#include "usb_cdc.h"
 
 /*- Definitions -------------------------------------------------------------*/
 #define CORE1_STACK_SIZE       512 // words
@@ -144,6 +145,9 @@ static int g_rd_ptr    = 0;
 static int g_wr_ptr    = 0;
 static int g_sof_index = 0;
 static bool g_may_fold = false;
+
+// 新モード: 即時COMポート送信
+static bool g_immediate_send_mode = false;
 
 /*- Implementations ---------------------------------------------------------*/
 
@@ -300,6 +304,9 @@ static void process_packet(int size)
     else if (crc16_usb(&out_data[2], out_size-2) != 0xb001)
       error |= CAPTURE_ERROR_CRC;
   }
+
+  // 追加: 即時送信モード時はここでDATA0を送信
+  send_data0_packet_if_needed(out_data, out_size);
 
   handle_folding(pid, error);
 
@@ -668,6 +675,23 @@ static void change_setting(char *name, int *value, int count, const char *str[])
 }
 
 //-----------------------------------------------------------------------------
+void capture_set_immediate_send_mode(bool enable) {
+  g_immediate_send_mode = enable;
+}
+
+// DATA0パケットを即時バイナリ送信する関数
+void send_data0_packet_if_needed(uint8_t *out_data, int out_size) {
+  if (!g_immediate_send_mode) return;
+  if (out_size < 4) return;
+  int pid = out_data[1] & 0x0f;
+  if (pid != Pid_Data0) return;
+  // out_data[2]以降がデータ本体
+  int data_len = out_size - 4; // SYNC, PID, DATA..., CRC16
+  if (data_len <= 0) return;
+  usb_cdc_send(&out_data[2], data_len);
+}
+
+//-----------------------------------------------------------------------------
 static void core1_main(void)
 {
   HAL_GPIO_TRIGGER_in();
@@ -707,6 +731,11 @@ static void core1_main(void)
       g_capture_speed = CaptureSpeed_Low;
     else if (cmd == 'z')
       {} // Do nothing here, stop only works if the capture is running
+    else if (cmd == 'i') {
+      g_immediate_send_mode = !g_immediate_send_mode;
+      display_puts("Immediate send mode: ");
+      display_puts(g_immediate_send_mode ? "ON\r\n" : "OFF\r\n");
+    }
   }
 }
 
